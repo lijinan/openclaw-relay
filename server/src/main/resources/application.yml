@@ -1,0 +1,22 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: spring-openclaw-wecom
+  profiles:
+    active: dev  # 默认使用开发环境
+
+wecom:
+  relay:
+    response-timeout: 60000
+    ping-interval: 30000
+    max-pending-messages: 1000
+    # key 为 clientId，value 为 authToken
+    clients:
+      qghub: "openclaw.qghub.cn"
+
+logging:
+  level:
+    root: INFO
+    com.openclaw.wecom: INFO

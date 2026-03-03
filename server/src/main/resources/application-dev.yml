@@ -1,0 +1,9 @@
+# 开发环境配置
+# 启动方式: java -jar app.jar --spring.profiles.active=dev
+
+logging:
+  level:
+    root: INFO
+    com.openclaw.wecom: DEBUG  # 开发环境开启 DEBUG，方便调试
+    org.springframework.web: DEBUG
+    org.springframework.web.socket: DEBUG

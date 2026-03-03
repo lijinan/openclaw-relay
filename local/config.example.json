@@ -1,0 +1,20 @@
+{
+  "server": {
+    "url": "wss://your-server.com/ws/relay",
+    "reconnectInterval": 5000,
+    "maxReconnectAttempts": 0
+  },
+  "auth": {
+    "clientId": "openclaw-local",
+    "authToken": "your-auth-token-here"
+  },
+  "openclaw": {
+    "baseUrl": "http://localhost:3000",
+    "webhookPath": "/webhooks/wecom",
+    "timeout": 60000
+  },
+  "heartbeat": {
+    "interval": 30000,
+    "timeout": 10000
+  }
+}
