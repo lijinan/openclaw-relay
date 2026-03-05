@@ -58,6 +58,18 @@ export class OpenClawClient {
         };
       }
 
+      const responseHeaders: Record<string, string> = {};
+      if (response.headers) {
+        for (const [key, value] of Object.entries(response.headers)) {
+          if (value === undefined || value === null) continue;
+          if (Array.isArray(value)) {
+            responseHeaders[key] = value.join(', ');
+          } else {
+            responseHeaders[key] = String(value);
+          }
+        }
+      }
+
       const responseBody = typeof response.data === 'string'
         ? response.data
         : JSON.stringify(response.data);
@@ -65,6 +77,7 @@ export class OpenClawClient {
       return {
         status: response.status,
         body: responseBody,
+        headers: responseHeaders,
       };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';

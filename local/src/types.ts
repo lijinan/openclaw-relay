@@ -25,4 +25,5 @@ export interface WebhookPayload {
 export interface ResponsePayload {
   status: number;
   body: string;
+  headers?: Record<string, string>;
 }

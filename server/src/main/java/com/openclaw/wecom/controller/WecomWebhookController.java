@@ -42,6 +42,7 @@ public class WecomWebhookController {
         Map<String, String> query = extractQueryParams(request);
         Map<String, String> headers = extractHeaders(request);
         log.debug("Query params: {}", query);
+        log.debug("Headers: {}", headers);
 
         // URL 验证转发给 OpenClaw 处理（Java 层不验证签名，由 OpenClaw 负责）
         // 这样 Java 端不需要配置 token 和 encodingAesKey
@@ -74,16 +75,42 @@ public class WecomWebhookController {
             }
 
             Map<String, Object> responsePayload = (Map<String, Object>) response.getPayload();
-            int status = responsePayload != null && responsePayload.containsKey("status")
-                    ? ((Number) responsePayload.get("status")).intValue()
-                    : 200;
-            String body = responsePayload != null && responsePayload.containsKey("body")
-                    ? (String) responsePayload.get("body")
-                    : "";
+            int status = 200;
+            String body = "";
+            Map<String, String> responseHeaders = new HashMap<>();
 
-            log.info("Verification response: status={}, body={}", status, 
+            if (responsePayload != null) {
+                Object statusObj = responsePayload.get("status");
+                if (statusObj instanceof Number) {
+                    status = ((Number) statusObj).intValue();
+                }
+
+                Object bodyObj = responsePayload.get("body");
+                if (bodyObj instanceof String) {
+                    body = (String) bodyObj;
+                }
+
+                Object headersObj = responsePayload.get("headers");
+                if (headersObj instanceof Map<?, ?>) {
+                    Map<?, ?> headersMap = (Map<?, ?>) headersObj;
+                    for (Map.Entry<?, ?> entry : headersMap.entrySet()) {
+                        Object key = entry.getKey();
+                        Object value = entry.getValue();
+                        if (key != null && value != null) {
+                            responseHeaders.put(key.toString(), value.toString());
+                        }
+                    }
+                }
+            }
+
+            log.info("Verification response: status={}, body={}", status,
                     body.length() > 50 ? body.substring(0, 50) + "..." : body);
-            return ResponseEntity.status(status).body(body);
+
+            ResponseEntity.BodyBuilder builder = ResponseEntity.status(status);
+            for (Map.Entry<String, String> header : responseHeaders.entrySet()) {
+                builder.header(header.getKey(), header.getValue());
+            }
+            return builder.body(body);
 
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
@@ -148,25 +175,42 @@ public class WecomWebhookController {
             }
 
             Map<String, Object> responsePayload = (Map<String, Object>) response.getPayload();
-            
-            // 安全的类型转换
+
             int status = 200;
             String responseBody = "";
-            
+            Map<String, String> responseHeaders = new HashMap<>();
+
             if (responsePayload != null) {
                 Object statusObj = responsePayload.get("status");
                 if (statusObj instanceof Number) {
                     status = ((Number) statusObj).intValue();
                 }
-                
+
                 Object bodyObj = responsePayload.get("body");
                 if (bodyObj instanceof String) {
                     responseBody = (String) bodyObj;
                 }
+
+                Object headersObj = responsePayload.get("headers");
+                if (headersObj instanceof Map<?, ?>) {
+                    Map<?, ?> headersMap = (Map<?, ?>) headersObj;
+                    for (Map.Entry<?, ?> entry : headersMap.entrySet()) {
+                        Object key = entry.getKey();
+                        Object value = entry.getValue();
+                        if (key != null && value != null) {
+                            responseHeaders.put(key.toString(), value.toString());
+                        }
+                    }
+                }
             }
 
             log.debug("Response: status={}, body length={}", status, responseBody.length());
-            return ResponseEntity.status(status).body(responseBody);
+
+            ResponseEntity.BodyBuilder builder = ResponseEntity.status(status);
+            for (Map.Entry<String, String> header : responseHeaders.entrySet()) {
+                builder.header(header.getKey(), header.getValue());
+            }
+            return builder.body(responseBody);
 
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
