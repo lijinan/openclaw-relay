@@ -22,24 +22,33 @@ export class OpenClawClient {
     const queryString = payload.query
       ? '?' + new URLSearchParams(payload.query).toString()
       : '';
+    const forwardedHeaders = payload.headers ?? {};
 
     try {
       let response;
 
       if (payload.method === 'GET') {
         response = await this.client.get(url + queryString, {
+          headers: {
+            ...forwardedHeaders,
+          },
           validateStatus: () => true,
         });
       } else if (payload.method === 'POST') {
         const body = payload.body || '';
-        const contentType = body.startsWith('{') || body.startsWith('[')
-          ? 'application/json'
-          : 'text/xml';
+        const headers: Record<string, string> = { ...forwardedHeaders };
+        const hasContentType = Object.keys(headers).some(
+          (key) => key.toLowerCase() === 'content-type',
+        );
+        if (!hasContentType) {
+          const contentType = body.startsWith('{') || body.startsWith('[')
+            ? 'application/json'
+            : 'text/xml';
+          headers['Content-Type'] = contentType;
+        }
 
         response = await this.client.post(url + queryString, body, {
-          headers: {
-            'Content-Type': contentType,
-          },
+          headers,
           validateStatus: () => true,
         });
       } else {

@@ -19,5 +19,7 @@ public class WebhookPayload {
 
     private Map<String, String> query;
 
+    private Map<String, String> headers;
+
     private String body;
 }

@@ -40,6 +40,7 @@ public class WecomWebhookController {
         log.info("Received GET request for URL verification");
 
         Map<String, String> query = extractQueryParams(request);
+        Map<String, String> headers = extractHeaders(request);
         log.debug("Query params: {}", query);
 
         // URL 验证转发给 OpenClaw 处理（Java 层不验证签名，由 OpenClaw 负责）
@@ -58,6 +59,7 @@ public class WecomWebhookController {
                 .method("GET")
                 .path(request.getRequestURI())
                 .query(query)
+                .headers(headers)
                 .build();
 
         ServerMessage message = ServerMessage.webhook(messageId, payload);
@@ -104,6 +106,7 @@ public class WecomWebhookController {
         log.debug("Request body length: {}", body != null ? body.length() : 0);
 
         Map<String, String> query = extractQueryParams(request);
+        Map<String, String> headers = extractHeaders(request);
         log.debug("Query params: {}", query);
 
         // 签名验证由 OpenClaw 层处理（需要解密消息体后验证 encrypt 字段）
@@ -115,6 +118,7 @@ public class WecomWebhookController {
                 .method("POST")
                 .path(request.getRequestURI())
                 .query(query)
+                .headers(headers)
                 .body(body != null ? body : "")
                 .build();
 
@@ -184,5 +188,18 @@ public class WecomWebhookController {
             params.put(name, request.getParameter(name));
         }
         return params;
+    }
+
+    private Map<String, String> extractHeaders(HttpServletRequest request) {
+        Map<String, String> headers = new HashMap<>();
+        Enumeration<String> headerNames = request.getHeaderNames();
+        while (headerNames.hasMoreElements()) {
+            String name = headerNames.nextElement();
+            String value = request.getHeader(name);
+            if (value != null) {
+                headers.put(name, value);
+            }
+        }
+        return headers;
     }
 }
