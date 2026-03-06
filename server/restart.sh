@@ -43,13 +43,13 @@ echo ""
 
 # 3. 停止旧服务
 echo "3. 停止旧服务..."
-PID=$(ps aux | grep "openclaw-plugin-wecom-relay" | grep -v grep | awk '{print $2}')
+PID=$(ps aux | grep "openclaw-relay" | grep -v grep | awk '{print $2}')
 if [ -n "$PID" ]; then
     echo "正在停止进程: $PID"
     kill $PID
     sleep 3
     # 检查是否还有进程
-    PID=$(ps aux | grep "openclaw-plugin-wecom-relay" | grep -v grep | awk '{print $2}')
+    PID=$(ps aux | grep "openclaw-relay" | grep -v grep | awk '{print $2}')
     if [ -n "$PID" ]; then
         echo "强制终止进程: $PID"
         kill -9 $PID
@@ -61,7 +61,7 @@ echo ""
 
 # 4. 启动新服务
 echo "4. 启动新服务 (环境: $ENV)..."
-java -Duser.timezone=Asia/Shanghai -jar -Dspring.profiles.active="$ENV" target/openclaw-plugin-wecom-relay-1.0.0.jar > app.log 2>&1 &
+java -Duser.timezone=Asia/Shanghai -jar -Dspring.profiles.active="$ENV" target/openclaw-relay-1.0.0.jar > app.log 2>&1 &
 PID=$!
 echo "服务已启动，进程ID: $PID"
 echo ""

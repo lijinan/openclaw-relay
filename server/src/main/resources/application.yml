@@ -3,11 +3,11 @@ server:
 
 spring:
   application:
-    name: openclaw-plugin-wecom-relay
+    name: openclaw-relay
   profiles:
     active: dev  # 默认使用开发环境
 
-wecom:
+openclaw:
   relay:
     response-timeout: 60000
     ping-interval: 30000

@@ -9,7 +9,7 @@ import java.util.Map;
 
 @Data
 @Component
-@ConfigurationProperties(prefix = "wecom.relay")
+@ConfigurationProperties(prefix = "openclaw.relay")
 public class RelayConfig {
 
     private int responseTimeout = 60000;
