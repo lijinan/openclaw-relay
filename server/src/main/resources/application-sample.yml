@@ -9,6 +9,13 @@ spring:
 
 openclaw:
   relay:
+    bus:
+      type: memory
+      key-prefix: openclaw:relay
+      request-ttl-seconds: 300
+      response-ttl-seconds: 300
+      poll-timeout-ms: 1000
+      processor-fixed-delay-ms: 50
     clients:
       openclaw-local: "your-auth-token-here"
 

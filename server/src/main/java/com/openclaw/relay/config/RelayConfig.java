@@ -18,6 +18,8 @@ public class RelayConfig {
 
     private int maxPendingMessages = 1000;
 
+    private Bus bus = new Bus();
+
     /**
      * 客户端认证配置：key 为 clientId，value 为 authToken
      * 示例：
@@ -30,6 +32,16 @@ public class RelayConfig {
     private String token = "";
 
     private String encodingAesKey = "";
+
+    @Data
+    public static class Bus {
+        private String type = "memory";
+        private String keyPrefix = "openclaw:relay";
+        private int requestTtlSeconds = 300;
+        private int responseTtlSeconds = 300;
+        private int pollTimeoutMs = 1000;
+        private int processorFixedDelayMs = 50;
+    }
 
     /**
      * 验证 clientId 和 authToken 是否匹配

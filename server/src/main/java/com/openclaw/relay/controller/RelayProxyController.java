@@ -1,11 +1,11 @@
 package com.openclaw.relay.controller;
 
+import com.openclaw.relay.bus.BusRequest;
+import com.openclaw.relay.bus.RelayMessageBus;
 import com.openclaw.relay.config.RelayConfig;
 import com.openclaw.relay.model.ClientMessage;
 import com.openclaw.relay.model.ServerMessage;
 import com.openclaw.relay.model.WebhookPayload;
-import com.openclaw.relay.service.PendingMessageManager;
-import com.openclaw.relay.websocket.RelayWebSocketHandler;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
@@ -26,9 +26,6 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeoutException;
 
 @Slf4j
 @RestController
@@ -64,10 +61,7 @@ public class RelayProxyController {
     }
 
     @Autowired
-    private RelayWebSocketHandler webSocketHandler;
-
-    @Autowired
-    private PendingMessageManager pendingMessageManager;
+    private RelayMessageBus messageBus;
 
     @Autowired
     private RelayConfig relayConfig;
@@ -91,7 +85,7 @@ public class RelayProxyController {
             }
         }
 
-        if (!webSocketHandler.hasConnectedClient(clientId)) {
+        if (!messageBus.isClientOnline(clientId)) {
             return plainText(HttpStatus.SERVICE_UNAVAILABLE, "No connected client for clientId: " + clientId);
         }
 
@@ -118,69 +112,66 @@ public class RelayProxyController {
         }
 
         String messageId = UUID.randomUUID().toString();
-        CompletableFuture<ClientMessage> future = pendingMessageManager.registerMessage(messageId);
-
         ServerMessage message = ServerMessage.webhook(messageId, payload);
-        if (!webSocketHandler.sendMessageToClient(clientId, message)) {
-            return plainText(HttpStatus.SERVICE_UNAVAILABLE, "Failed to send request to clientId: " + clientId);
+
+        messageBus.publishRequest(BusRequest.builder()
+                .clientId(clientId)
+                .messageId(messageId)
+                .message(message)
+                .createdAt(System.currentTimeMillis())
+                .attempts(0)
+                .build());
+
+        ClientMessage response = messageBus.consumeResponse(messageId, relayConfig.getResponseTimeout());
+        if (response == null) {
+            return plainText(HttpStatus.GATEWAY_TIMEOUT, "Request timeout after " + relayConfig.getResponseTimeout() + "ms");
+        }
+        if (response.getError() != null) {
+            if (response.getError().startsWith("No connected client")) {
+                return plainText(HttpStatus.SERVICE_UNAVAILABLE, response.getError());
+            }
+            return plainText(HttpStatus.BAD_GATEWAY, response.getError());
         }
 
-        try {
-            ClientMessage response = future.get();
-            if (response.getError() != null) {
-                return plainText(HttpStatus.BAD_GATEWAY, response.getError());
+        Map<String, Object> responsePayload = (Map<String, Object>) response.getPayload();
+        int status = 200;
+        HttpHeaders responseHeaders = new HttpHeaders();
+        byte[] responseBody = new byte[0];
+
+        if (responsePayload != null) {
+            Object statusObj = responsePayload.get("status");
+            if (statusObj instanceof Number) {
+                status = ((Number) statusObj).intValue();
             }
 
-            Map<String, Object> responsePayload = (Map<String, Object>) response.getPayload();
-            int status = 200;
-            HttpHeaders responseHeaders = new HttpHeaders();
-            byte[] responseBody = new byte[0];
-
-            if (responsePayload != null) {
-                Object statusObj = responsePayload.get("status");
-                if (statusObj instanceof Number) {
-                    status = ((Number) statusObj).intValue();
-                }
-
-                Object headersObj = responsePayload.get("headers");
-                if (headersObj instanceof Map<?, ?>) {
-                    Map<?, ?> headersMap = (Map<?, ?>) headersObj;
-                    for (Map.Entry<?, ?> entry : headersMap.entrySet()) {
-                        if (entry.getKey() == null || entry.getValue() == null) {
-                            continue;
-                        }
-                        String key = entry.getKey().toString();
-                        if (HOP_BY_HOP_HEADERS.contains(key.toLowerCase())) {
-                            continue;
-                        }
-                        responseHeaders.add(key, entry.getValue().toString());
+            Object headersObj = responsePayload.get("headers");
+            if (headersObj instanceof Map<?, ?>) {
+                Map<?, ?> headersMap = (Map<?, ?>) headersObj;
+                for (Map.Entry<?, ?> entry : headersMap.entrySet()) {
+                    if (entry.getKey() == null || entry.getValue() == null) {
+                        continue;
                     }
-                }
-
-                Object base64Obj = responsePayload.get("bodyBase64");
-                if (base64Obj instanceof String && !((String) base64Obj).isEmpty()) {
-                    responseBody = Base64.getDecoder().decode((String) base64Obj);
-                } else {
-                    Object bodyObj = responsePayload.get("body");
-                    if (bodyObj instanceof String) {
-                        responseBody = ((String) bodyObj).getBytes(StandardCharsets.UTF_8);
+                    String key = entry.getKey().toString();
+                    if (HOP_BY_HOP_HEADERS.contains(key.toLowerCase())) {
+                        continue;
                     }
+                    responseHeaders.add(key, entry.getValue().toString());
                 }
             }
 
-            ResponseEntity.BodyBuilder builder = ResponseEntity.status(status).headers(responseHeaders);
-            return builder.body(responseBody);
-
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            return plainText(HttpStatus.INTERNAL_SERVER_ERROR, "Interrupted");
-        } catch (ExecutionException e) {
-            Throwable cause = e.getCause();
-            if (cause instanceof TimeoutException) {
-                return plainText(HttpStatus.GATEWAY_TIMEOUT, cause.getMessage());
+            Object base64Obj = responsePayload.get("bodyBase64");
+            if (base64Obj instanceof String && !((String) base64Obj).isEmpty()) {
+                responseBody = Base64.getDecoder().decode((String) base64Obj);
+            } else {
+                Object bodyObj = responsePayload.get("body");
+                if (bodyObj instanceof String) {
+                    responseBody = ((String) bodyObj).getBytes(StandardCharsets.UTF_8);
+                }
             }
-            return plainText(HttpStatus.BAD_GATEWAY, "Error: " + (cause != null ? cause.getMessage() : e.getMessage()));
         }
+
+        ResponseEntity.BodyBuilder builder = ResponseEntity.status(status).headers(responseHeaders);
+        return builder.body(responseBody);
     }
 
     private ResponseEntity<byte[]> plainText(HttpStatus status, String message) {

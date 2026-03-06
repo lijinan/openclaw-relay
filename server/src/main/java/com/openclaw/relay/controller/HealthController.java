@@ -1,8 +1,7 @@
 package com.openclaw.relay.controller;
 
-import com.openclaw.relay.service.MessageBufferService;
+import com.openclaw.relay.config.RelayConfig;
 import com.openclaw.relay.websocket.RelayWebSocketHandler;
-import com.openclaw.relay.service.PendingMessageManager;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -21,18 +20,14 @@ public class HealthController {
     private RelayWebSocketHandler webSocketHandler;
 
     @Autowired
-    private PendingMessageManager pendingMessageManager;
-
-    @Autowired
-    private MessageBufferService messageBufferService;
+    private RelayConfig relayConfig;
 
     @GetMapping("/health")
     public Map<String, Object> health() {
         Map<String, Object> status = new HashMap<>();
         status.put("status", "UP");
         status.put("connectedClients", webSocketHandler.getConnectedClientCount());
-        status.put("pendingMessages", pendingMessageManager.getPendingCount());
-        status.put("bufferedMessages", messageBufferService.getBufferSize());
+        status.put("busType", relayConfig.getBus().getType());
         return status;
     }
 
@@ -40,9 +35,8 @@ public class HealthController {
     public Map<String, Object> status() {
         Map<String, Object> status = new HashMap<>();
         status.put("connectedClients", webSocketHandler.getConnectedClientCount());
-        status.put("pendingMessages", pendingMessageManager.getPendingCount());
-        status.put("bufferedMessages", messageBufferService.getBufferSize());
         status.put("hasClient", webSocketHandler.hasConnectedClient());
+        status.put("busType", relayConfig.getBus().getType());
         return status;
     }
 }

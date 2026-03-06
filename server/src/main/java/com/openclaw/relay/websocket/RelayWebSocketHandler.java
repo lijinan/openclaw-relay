@@ -1,11 +1,10 @@
 package com.openclaw.relay.websocket;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.openclaw.relay.bus.RelayMessageBus;
 import com.openclaw.relay.config.RelayConfig;
 import com.openclaw.relay.model.ClientMessage;
 import com.openclaw.relay.model.ServerMessage;
-import com.openclaw.relay.service.MessageBufferService;
-import com.openclaw.relay.service.PendingMessageManager;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
@@ -35,10 +34,7 @@ public class RelayWebSocketHandler extends TextWebSocketHandler {
     private RelayConfig relayConfig;
 
     @Autowired
-    private PendingMessageManager pendingMessageManager;
-
-    @Autowired
-    private MessageBufferService messageBufferService;
+    private RelayMessageBus messageBus;
 
     private final Map<String, WebSocketSession> sessions = new ConcurrentHashMap<>();
     private final Map<String, String> clientIdToSessionId = new ConcurrentHashMap<>();
@@ -103,6 +99,7 @@ public class RelayWebSocketHandler extends TextWebSocketHandler {
         }
         if (clientId != null) {
             clientIdToSessionId.remove(clientId);
+            messageBus.markClientOffline(clientId);
             log.info("Client unregistered: {}", clientId);
         }
     }
@@ -193,9 +190,7 @@ public class RelayWebSocketHandler extends TextWebSocketHandler {
 
         ServerMessage response = ServerMessage.registered();
         sendMessage(session, response);
-
-        log.info("Flushing buffered messages after client registration");
-        messageBufferService.flushBuffer();
+        messageBus.markClientOnline(clientId);
     }
 
     private boolean isReservedClientId(String clientId) {
@@ -220,7 +215,7 @@ public class RelayWebSocketHandler extends TextWebSocketHandler {
         }
 
         log.info("Received response for message: {}", messageId);
-        pendingMessageManager.completeMessage(messageId, message);
+        messageBus.publishResponse(message);
     }
 
     public boolean sendMessage(WebSocketSession session, ServerMessage message) {
@@ -282,5 +277,22 @@ public class RelayWebSocketHandler extends TextWebSocketHandler {
         return (int) sessions.values().stream()
                 .filter(s -> s.isOpen() && Boolean.TRUE.equals(authenticatedSessions.get(s.getId())))
                 .count();
+    }
+
+    public Set<String> getConnectedClientIds() {
+        Set<String> clientIds = new HashSet<>();
+        for (Map.Entry<String, String> entry : clientIdToSessionId.entrySet()) {
+            String clientId = entry.getKey();
+            String sessionId = entry.getValue();
+            if (clientId == null || sessionId == null) {
+                continue;
+            }
+            WebSocketSession session = sessions.get(sessionId);
+            if (session == null || !session.isOpen() || !Boolean.TRUE.equals(authenticatedSessions.get(sessionId))) {
+                continue;
+            }
+            clientIds.add(clientId);
+        }
+        return clientIds;
     }
 }
