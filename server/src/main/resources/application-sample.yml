@@ -10,12 +10,22 @@ spring:
 openclaw:
   relay:
     bus:
-      type: memory
-      key-prefix: openclaw:relay
-      request-ttl-seconds: 300
-      response-ttl-seconds: 300
+      # memory 表示使用本地内存队列（适用于单机部署）； redis 表示使用 Redis 实现（适用于多节点集群部署，支持负载均衡）
+      type: memory 
+      # 消息总线中使用的 Key 前缀。在 Redis 模式下，用于区分不同的业务数据，避免与其他应用的 Redis 数据冲突
+      key-prefix: openclaw:relay 
+      # 请求消息在总线中的 生存时间 (TTL) ，单位为秒。 
+      # 如果一个 HTTP 请求发送到总线后，300 秒内没有被任何 WebSocket 处理器领取，该消息将过期失效
+      request-ttl-seconds: 300 
+      # 响应结果在总线中的 生存时间 (TTL) ，单位为秒，
+      # WebSocket 客户端返回处理结果后，该结果在总线中保留的时间。如果 HTTP 侧在 300 秒内没取走结果，则会被丢弃。
+      response-ttl-seconds: 300 
+      # 从总线拉取消息时的 阻塞超时时间 ，单位为毫秒。
+      # 处理器在尝试从总线获取新消息时，如果当前没有消息，会最多等待 1000 毫秒。这有助于平衡实时性与 CPU 占用。
       poll-timeout-ms: 1000
-      processor-fixed-delay-ms: 50
+      # 处理器轮询的 固定间隔时间 ，单位为毫秒。
+      # 两次拉取操作之间的休息时间，防止在极高并发或总线为空时产生过于频繁的空转，保护系统性能。
+      processor-fixed-delay-ms: 500
     clients:
       openclaw-local: "your-auth-token-here"
 
