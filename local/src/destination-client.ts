@@ -2,21 +2,56 @@ import axios, { AxiosInstance } from 'axios';
 import { Config } from './config';
 import { WebhookPayload, ResponsePayload } from './types';
 
-export class OpenClawClient {
+export class DestinationClient {
   private client: AxiosInstance;
   private config: Config;
 
   constructor(config: Config) {
     this.config = config;
     this.client = axios.create({
-      baseURL: config.openclaw.baseUrl,
-      timeout: config.openclaw.timeout,
+      baseURL: config.destination.baseUrl,
+      timeout: config.destination.timeout,
       headers: {},
     });
   }
 
+  private isPathAllowed(path: string): boolean {
+    const allowedPages = this.config.destination.allowedPages;
+    
+    // 如果白名单为空，允许所有路径
+    if (!allowedPages || allowedPages.length === 0) {
+      return true;
+    }
+
+    // 移除查询参数，只检查路径
+    const cleanPath = path.split('?')[0];
+    
+    // 检查路径是否在白名单中
+    return allowedPages.some(allowedPage => {
+      // 支持精确匹配和通配符匹配
+      if (allowedPage.endsWith('*')) {
+        const prefix = allowedPage.slice(0, -1);
+        return cleanPath.startsWith(prefix);
+      }
+      return cleanPath === allowedPage || cleanPath.startsWith(allowedPage + '/');
+    });
+  }
+
   async forwardWebhook(payload: WebhookPayload): Promise<ResponsePayload> {
-    const url = payload.path || this.config.openclaw.webhookPath;
+    const path = payload.path || '/';
+    
+    // 检查路径是否在白名单中
+    if (!this.isPathAllowed(path)) {
+      console.warn(`[DestinationClient] Path not allowed: ${path}`);
+      return {
+        status: 403,
+        body: JSON.stringify({ error: 'Forbidden: No permission to access this page' }),
+        headers: {
+          'content-type': 'application/json',
+        },
+      };
+    }
+
     const queryString = payload.query
       ? '?' + new URLSearchParams(payload.query).toString()
       : '';
@@ -43,7 +78,7 @@ export class OpenClawClient {
 
       const response = await this.client.request({
         method,
-        url: url + queryString,
+        url: path + queryString,
         headers: filteredHeaders,
         data,
         responseType: 'arraybuffer',
@@ -82,11 +117,11 @@ export class OpenClawClient {
       };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      console.error('[OpenClawClient] Error forwarding webhook:', errorMessage);
-      
+      console.error('[DestinationClient] Error forwarding webhook:', errorMessage);
+
       return {
         status: 502,
-        body: JSON.stringify({ error: `Failed to connect to OpenClaw: ${errorMessage}` }),
+        body: JSON.stringify({ error: `Failed to connect to destination: ${errorMessage}` }),
       };
     }
   }

@@ -1,14 +1,14 @@
-# OpenClaw WeCom 本地中间层
+# 通用 Webhook 本地中继
 
-本地中间层客户端，用于将企业微信机器人的请求通过 WebSocket 隧道转发到本地运行的 OpenClaw。
+本地中继客户端，用于将 Webhook 请求通过 WebSocket 隧道转发到本地运行的目标服务。
 
 ## 架构说明
 
 ```
-企业微信服务器 → 公网服务器 → [WebSocket 隧道] → 本地中间层 → 本地 OpenClaw
+公网服务器 → [WebSocket 隧道] → 本地中继 → 本地目标服务
 ```
 
-由于本地 OpenClaw 无法直接从公网访问，本地中间层主动与公网服务器建立 WebSocket 连接，服务器收到企业微信消息后通过该连接转发到本地。
+由于本地服务无法直接从公网访问，本地中继主动与公网服务器建立 WebSocket 连接，服务器收到 Webhook 请求后通过该连接转发到本地。
 
 ## 快速开始
 
@@ -36,13 +36,16 @@ cp config.example.json config.json
     "maxReconnectAttempts": 0
   },
   "auth": {
-    "clientId": "openclaw-local",
+    "clientId": "relay-local",
     "authToken": "your-auth-token-here"
   },
-  "openclaw": {
+  "destination": {
     "baseUrl": "http://localhost:3000",
-    "webhookPath": "/webhooks/wecom",
-    "timeout": 60000
+    "timeout": 60000,
+    "allowedPages": [
+      "/webhooks/wecom",
+      "/api/*"
+    ]
   },
   "heartbeat": {
     "interval": 30000,
@@ -71,15 +74,26 @@ npm start
 | `server.url` | 公网服务器 WebSocket 地址 | `ws://localhost:8080/relay/ws/relay` |
 | `server.reconnectInterval` | 重连间隔（毫秒） | `5000` |
 | `server.maxReconnectAttempts` | 最大重连次数，0 表示无限 | `0` |
-| `auth.clientId` | 客户端标识 | `openclaw-local` |
+| `auth.clientId` | 客户端标识 | `relay-local` |
 | `auth.authToken` | 认证令牌 | - |
-| `openclaw.baseUrl` | 本地 OpenClaw 地址 | `http://localhost:3000` |
-| `openclaw.webhookPath` | OpenClaw webhook 路径 | `/webhooks/wecom` |
-| `openclaw.timeout` | 请求超时时间（毫秒） | `60000` |
+| `destination.baseUrl` | 本地目标服务地址 | `http://localhost:3000` |
+| `destination.timeout` | 请求超时时间（毫秒） | `60000` |
+| `destination.allowedPages` | 允许转发的页面路径白名单 | `[]`（空数组表示允许所有） |
 | `heartbeat.interval` | 心跳间隔（毫秒） | `30000` |
 | `heartbeat.timeout` | 心跳响应超时（毫秒） | `10000` |
 
-## 环境变量
+### 白名单配置说明
+
+`allowedPages` 用于控制哪些路径可以被转发到本地目标服务：
+
+- **空数组 `[]`**：允许所有路径（默认行为）
+- **精确匹配**：如 `/webhooks/wecom` 只匹配该路径
+- **前缀匹配**：如 `/api` 匹配 `/api`、`/api/users` 等
+- **通配符匹配**：如 `/api/*` 匹配 `/api/` 开头的所有路径
+
+不在白名单中的路径会返回 `403 Forbidden` 错误。
+
+### 环境变量
 
 也可以通过环境变量配置：
 
@@ -88,18 +102,18 @@ npm start
 | `RELAY_SERVER_URL` | `server.url` |
 | `RELAY_CLIENT_ID` | `auth.clientId` |
 | `RELAY_AUTH_TOKEN` | `auth.authToken` |
-| `OPENCLAW_BASE_URL` | `openclaw.baseUrl` |
-| `OPENCLAW_WEBHOOK_PATH` | `openclaw.webhookPath` |
+| `DESTINATION_BASE_URL` | `destination.baseUrl` |
 | `CONFIG_PATH` | 配置文件路径 |
 
 ## 消息流程
 
-1. 本地中间层启动，连接公网服务器 WebSocket
+1. 本地中继启动，连接公网服务器 WebSocket
 2. 发送 `register` 消息进行认证
 3. 认证成功后开始心跳保活
-4. 服务器收到企业微信请求，通过 WebSocket 发送 `webhook` 消息
-5. 本地中间层将请求转发到本地 OpenClaw
-6. 收到 OpenClaw 响应后，发送 `response` 消息返回服务器
+4. 服务器收到 Webhook 请求，通过 WebSocket 发送 `webhook` 消息
+5. 本地中继检查请求路径是否在白名单中
+6. 白名单校验通过后，将请求转发到本地目标服务
+7. 收到目标服务响应后，发送 `response` 消息返回服务器
 
 ## 与服务器端配合
 
@@ -107,8 +121,7 @@ npm start
 
 ```yaml
 # 服务器端 application.yml
-wecom:
-  relay:
-    clients:
-      openclaw-local: "your-auth-token-here"
+relay:
+  clients:
+    relay-local: "your-auth-token-here"
 ```

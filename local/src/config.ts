@@ -11,10 +11,10 @@ export interface Config {
     clientId: string;
     authToken: string;
   };
-  openclaw: {
+  destination: {
     baseUrl: string;
-    webhookPath: string;
     timeout: number;
+    allowedPages: string[];
   };
   heartbeat: {
     interval: number;
@@ -29,13 +29,13 @@ export const defaultConfig: Config = {
     maxReconnectAttempts: 0,
   },
   auth: {
-    clientId: 'openclaw-local',
+    clientId: 'relay-local',
     authToken: 'your-auth-token',
   },
-  openclaw: {
+  destination: {
     baseUrl: 'http://localhost:3000',
-    webhookPath: '/webhooks/wecom',
     timeout: 60000,
+    allowedPages: [],
   },
   heartbeat: {
     interval: 30000,
@@ -61,7 +61,7 @@ export function loadConfig(): Config {
   let config: Config = { ...defaultConfig };
 
   const configPath = process.env.CONFIG_PATH || path.join(process.cwd(), 'config.json');
-  
+
   if (fs.existsSync(configPath)) {
     try {
       const fileContent = fs.readFileSync(configPath, 'utf-8');
@@ -82,11 +82,8 @@ export function loadConfig(): Config {
   if (process.env.RELAY_AUTH_TOKEN) {
     config.auth.authToken = process.env.RELAY_AUTH_TOKEN;
   }
-  if (process.env.OPENCLAW_BASE_URL) {
-    config.openclaw.baseUrl = process.env.OPENCLAW_BASE_URL;
-  }
-  if (process.env.OPENCLAW_WEBHOOK_PATH) {
-    config.openclaw.webhookPath = process.env.OPENCLAW_WEBHOOK_PATH;
+  if (process.env.DESTINATION_BASE_URL) {
+    config.destination.baseUrl = process.env.DESTINATION_BASE_URL;
   }
 
   return config;

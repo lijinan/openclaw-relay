@@ -1,7 +1,7 @@
 {
-  "name": "openclaw-wecom-local-relay",
+  "name": "webhook-local-relay",
   "version": "1.0.0",
-  "description": "Local relay client for OpenClaw WeCom plugin - connects to remote server and forwards requests to local OpenClaw",
+  "description": "Local relay client for webhook forwarding - connects to remote server and forwards requests to local destination service",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
@@ -11,12 +11,12 @@
     "watch": "ts-node-dev --respawn src/index.ts"
   },
   "keywords": [
-    "openclaw",
-    "wecom",
+    "webhook",
     "relay",
-    "websocket"
+    "websocket",
+    "tunnel"
   ],
-  "author": "OpenClaw",
+  "author": "",
   "license": "MIT",
   "dependencies": {
     "axios": "^1.6.0",

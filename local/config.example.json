@@ -5,13 +5,16 @@
     "maxReconnectAttempts": 0
   },
   "auth": {
-    "clientId": "openclaw-local",
+    "clientId": "relay-local",
     "authToken": "your-auth-token-here"
   },
-  "openclaw": {
-    "baseUrl": "http://localhost:18789",
-    "webhookPath": "/webhooks/wecom",
-    "timeout": 60000
+  "destination": {
+    "baseUrl": "http://localhost:3000",
+    "timeout": 60000,
+    "allowedPages": [
+      "/webhooks/wecom",
+      "/api/*"
+    ]
   },
   "heartbeat": {
     "interval": 30000,

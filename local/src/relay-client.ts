@@ -1,12 +1,12 @@
 import WebSocket from 'ws';
 import { Config, loadConfig } from './config';
 import { ServerMessage, ClientMessage, WebhookPayload, ResponsePayload } from './types';
-import { OpenClawClient } from './openclaw-client';
+import { DestinationClient } from './destination-client';
 
 export class RelayClient {
   private config: Config;
   private ws: WebSocket | null = null;
-  private openclawClient: OpenClawClient;
+  private destinationClient: DestinationClient;
   private reconnectAttempts = 0;
   private isConnecting = false;
   private isRegistered = false;
@@ -16,14 +16,14 @@ export class RelayClient {
 
   constructor(config?: Config) {
     this.config = config || loadConfig();
-    this.openclawClient = new OpenClawClient(this.config);
+    this.destinationClient = new DestinationClient(this.config);
   }
 
   async start(): Promise<void> {
     console.log('[RelayClient] Starting local relay client...');
     console.log(`[RelayClient] Server URL: ${this.config.server.url}`);
     console.log(`[RelayClient] Client ID: ${this.config.auth.clientId}`);
-    console.log(`[RelayClient] OpenClaw URL: ${this.config.openclaw.baseUrl}`);
+    console.log(`[RelayClient] Destination URL: ${this.config.destination.baseUrl}`);
 
     await this.connect();
   }
@@ -138,7 +138,7 @@ export class RelayClient {
     console.log(`[RelayClient] Forwarding webhook: ${payload.method} ${payload.path}`);
 
     try {
-      const response: ResponsePayload = await this.openclawClient.forwardWebhook(payload);
+      const response: ResponsePayload = await this.destinationClient.forwardWebhook(payload);
 
       const responseMessage: ClientMessage = {
         type: 'response',
@@ -170,7 +170,7 @@ export class RelayClient {
 
   private scheduleReconnect(): void {
     const maxAttempts = this.config.server.maxReconnectAttempts;
-    
+
     if (maxAttempts > 0 && this.reconnectAttempts >= maxAttempts) {
       console.error(`[RelayClient] Max reconnect attempts (${maxAttempts}) reached, stopping`);
       return;
@@ -212,20 +212,23 @@ export class RelayClient {
   }
 
   private sendPing(): void {
-    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
-      return;
-    }
+    console.log('[RelayClient] Sending ping');
 
-    const message: ClientMessage = { type: 'ping' };
+    const message: ClientMessage = {
+      type: 'ping',
+    };
+
     this.send(message);
 
     this.pongTimeout = setTimeout(() => {
-      console.warn('[RelayClient] Pong timeout, closing connection');
-      this.ws?.close();
+      console.error('[RelayClient] Pong timeout, reconnecting...');
+      this.ws?.terminate();
+      this.handleDisconnect();
     }, this.config.heartbeat.timeout);
   }
 
   private handlePong(): void {
+    console.log('[RelayClient] Received pong');
     if (this.pongTimeout) {
       clearTimeout(this.pongTimeout);
       this.pongTimeout = null;
@@ -233,29 +236,22 @@ export class RelayClient {
   }
 
   private send(message: ClientMessage): void {
-    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
-      console.error('[RelayClient] Cannot send: WebSocket not connected');
-      return;
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify(message));
+    } else {
+      console.error('[RelayClient] Cannot send message: WebSocket not connected');
     }
-
-    const json = JSON.stringify(message);
-    this.ws.send(json);
   }
 
   async stop(): Promise<void> {
     console.log('[RelayClient] Stopping...');
     this.stopHeartbeat();
-    
+
     if (this.ws) {
       this.ws.close();
       this.ws = null;
     }
-    
-    this.isRegistered = false;
-    console.log('[RelayClient] Stopped');
-  }
 
-  isConnected(): boolean {
-    return this.ws !== null && this.ws.readyState === WebSocket.OPEN && this.isRegistered;
+    console.log('[RelayClient] Stopped');
   }
 }
